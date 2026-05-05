@@ -35,7 +35,7 @@ Integration tests authenticate to Vault using **AppRole** (`role_id` and `secret
 1. Log in to Vault **as an admin** (UI or CLI with `VAULT_TOKEN` / namespace set).
 2. Add a new **HCL** file under **[acl-policies/](acl-policies/)** in this repository (or create the policy in the Vault UI: **Access → Policies → Create ACL Policy**).
 3. Define the policy with the paths and capabilities your new secrets engine needs.
-4. Save the policy with a **descriptive name** (e.g. `my-engine-crud`). Apply with `vault policy write <name> acl-policies/<name>.hcl` from `ContentManagement/hashicorp.vault` if you use the repo layout from [set_up_integration_tests.md](set_up_integration_tests.md).
+4. Save the policy with a **descriptive name** (e.g. `my-engine-crud`). Apply with `vault policy write <name> acl-policies/<name>.hcl` from `ContentManagement/hashicorp.vault` if you use the repo layout from [Guide: Setting Up Vault for Integration Tests](set_up_integration_tests.md).
 
 ### Example: Database secrets engine
 

@@ -1,6 +1,6 @@
 # Guide: Setting Up Vault for Integration Tests
 
-This guide walks through **end-to-end setup**: signing in to HashiCorp Cloud Platform, creating a dedicated namespace, enabling secrets engines and AppRole, defining ACL policies, issuing AppRole credentials, wiring **GitHub Actions** and **Bitwarden**, verifying access, and **running integration tests**. Use it for a **greenfield** cluster or namespace (for example a new HCP Vault Dedicated environment) or when **replacing** credentials and aligning Vault, CI, and team storage.
+This guide walks through **end-to-end setup**: signing in to HashiCorp Cloud Platform, creating a dedicated namespace, enabling secrets engines and AppRole, defining ACL policies, issuing AppRole credentials, wiring **GitHub Actions** and **Bitwarden**, verifying access, and **running integration tests**. Use it for a **greenfield** cluster or namespace (for example a new HCP Vault Dedicated environment, or when your team is setting up integration tests for the [hashicorp.vault](https://github.com/ansible-collections/hashicorp.vault) collection for the first time) or when **replacing** credentials and aligning Vault, CI, and team storage.
 
 For **adding** a single new secrets engine or policy after the baseline exists, use [Guide: Enabling a New Secret Engine for Integration Tests](updating_integration_test_role.md).
 
@@ -17,8 +17,8 @@ Do **not** treat the policies under [acl-policies/](acl-policies/) as a producti
 ## Prerequisites
 
 - **HashiCorp Cloud Platform (HCP) Vault** or **Vault Enterprise** (namespaces require Enterprise).
-- **Admin** access to create the child namespace under your organization’s admin namespace (for example `admin/` on HCP).
-- **Vault CLI** installed.
+- **Admin** access to create the child namespace under your organization’s admin namespace (for example `admin/` on HCP). If you’re new to the team or don’t have Vault access, work with your PM or team lead to request access through your organization’s provisioning process.
+- **Vault CLI** [installed](https://developer.hashicorp.com/vault/install).
 - Permission to **create and manage** GitHub Actions **secrets** for the repository that runs the tests.
 - Access to the **team Bitwarden vault** used for operational backups of CI secrets.
 - Agreement on **namespace path** and **mount paths** (this document uses the conventions in the table below).
@@ -44,7 +44,7 @@ Adjust `VAULT_ADDR` and the namespace string to match your environment. Placehol
 
 ## Policy HCL in this repository
 
-Canonical ACL policy definitions live as **HCL** under **[acl-policies/](acl-policies/)** (one file per Vault policy name, filename matches the policy). **Step 5** applies these files; edit the `.hcl` sources there rather than duplicating rules in this guide.
+Canonical ACL policy definitions live as **HCL** under **[acl-policies/](acl-policies/)** (one file per Vault policy name, filename matches the policy). **Step 5** applies these files; edit the `.hcl` sources there rather than duplicating rules in this guide. For an introduction to HCL policy syntax and concepts, see [HashiCorp's Vault policy tutorial](https://developer.hashicorp.com/vault/tutorials/get-started/introduction-policies).
 
 **Note:** The [ansible-collections/hashicorp.vault](https://github.com/ansible-collections/hashicorp.vault) `acl_policy` / `acl_policy_info` modules call the **legacy** HTTP API `GET /v1/sys/policy` (and `/v1/sys/policy/:name`), not only `/sys/policies/acl`. [acl-policies/acl-policy-crud.hcl](acl-policies/acl-policy-crud.hcl) therefore includes both **`sys/policy`** and **`sys/policies/acl`** paths.
 
@@ -55,7 +55,7 @@ vault policy write <policy-name> acl-policies/<policy-name>.hcl
 ```
 
 
-## Step 1: Sign in to HCP, then create the namespace (admin context)
+## Step 1: Sign in to HCP, then create the namespace (admin access required)
 
 ### HashiCorp Cloud Platform
 
@@ -66,9 +66,9 @@ When using **HCP Vault**:
 
 ### Create the namespace
 
-From an **admin** session (UI or CLI), create a dedicated namespace for integration tests, for example **`hashicorp-vault-integration-tests`**, under your parent namespace (on HCP, often under `admin`).
+From an **admin** session (UI or CLI), create a dedicated namespace for integration tests, for example **`hashicorp-vault-integration-tests`**, under your parent namespace (on HCP, often under `admin`). For detailed instructions on creating namespaces, see HashiCorp's [namespace tutorial](https://developer.hashicorp.com/vault/tutorials/enterprise/namespaces#create-namespaces).
 
-After it exists, all following CLI steps assume you target that namespace.
+After creating your new namespace, all following CLI steps assume you target that namespace.
 
 
 ## Step 2: Environment variables
@@ -82,7 +82,7 @@ export VAULT_ADDR="https://cloud-content-public-vault-<cluster-id>.z1.hashicorp.
 export VAULT_NAMESPACE="admin/hashicorp-vault-integration-tests"
 ```
 
-Sign in with an **admin** method appropriate to your org (OIDC, initial root, or another bootstrap flow) so `VAULT_TOKEN` is set for the next steps. Example after login:
+Sign in with an **admin** method appropriate to your org. For Red Hat Ansible teams using HCP Vault, this typically means **OIDC via `vault login -method=oidc`** (with your Red Hat SSO credentials), though initial root tokens or other bootstrap methods may be used in some environments. After successful login, `VAULT_TOKEN` is set for the next steps. Example after login:
 
 ```bash
 export VAULT_TOKEN=<admin-token>
@@ -93,7 +93,7 @@ export VAULT_TOKEN=<admin-token>
 
 ## Step 3: Enable secrets engines
 
-Enable KV v1, KV v2, database, and PKI at the **default** paths, and the **integration-test** mounts used by modules such as `kv1_secret`, `lookup_kv1_secret_get`, `kv2_secret`, `lookup_kv2_secret_get`, and `database_connection` (see conventions table):
+Enable KV v1, KV v2, database, and PKI at the **default** paths, and the **integration-test** mounts used by modules such as `kv1_secret`, `lookup_kv1_secret_get`, `kv2_secret`, `lookup_kv2_secret_get`, and `database_connection` (see [conventions table](#conventions-used-in-this-guide)):
 
 ```bash
 # Default mounts
@@ -252,15 +252,15 @@ You should see policies including `integration-tests-policy`, `acl-policy-crud`,
 ## Step 11: Run integration tests
 
 1. Confirm **GitHub Actions secrets** from Step 8 are present on the branch or environment the workflow uses.
-2. Trigger the integration-test workflow the way your repository defines it (for example **Actions** → select the workflow → **Run workflow**, or open a pull request that runs it).
+2. Trigger the integration-test workflow for the **[hashicorp.vault](https://github.com/ansible-collections/hashicorp.vault)** collection the way the repository defines it (for example **Actions** → select the workflow → **Run workflow**, or open a pull request that runs it).
 3. Confirm the job completes successfully and Vault-backed tests pass. If a job fails on authentication, re-check `VAULT_ADDR`, `VAULT_NAMESPACE`, `role_id`, and `secret_id` against the workflow’s expected secret names and namespace path.
 
-For **local** runs, export the same variables (and token from AppRole login) as your test harness expects, following that repository’s documentation.
+For **local** runs of hashicorp.vault integration tests, export the same variables (and token from AppRole login) as your test harness expects. See the collection’s [README - Running tests locally](https://github.com/ansible-collections/hashicorp.vault/blob/main/README.md#running-tests-locally) for detailed instructions and additional references.
 
 
 ## Ongoing changes (new engines or policies)
 
-When you **add** a new secrets engine or policy after initial setup, create the policy and **rewrite** `token_policies` on the AppRole with **every** policy name still required in a single `vault write`—Vault replaces the list. Step-by-step instructions are in [updating_integration_test_role.md](updating_integration_test_role.md).
+When you **add** a new secrets engine or policy after initial setup, create the policy and **rewrite** `token_policies` on the AppRole with **every** policy name still required in a single `vault write`—Vault replaces the list. Step-by-step instructions are in [Guide: Enabling a New Secret Engine for Integration Tests](updating_integration_test_role.md).
 
 
 ## Quick reference checklist
@@ -282,4 +282,4 @@ When you **add** a new secrets engine or policy after initial setup, create the 
 
 ## Summary
 
-End-to-end setup means: an isolated **namespace**; default and integration-test **KV**, **database**, and **PKI** mounts (see conventions table); **ACL policies** from **`acl-policies/*.hcl`** attached to **AppRole** **`approle-integration-tests`** / role **`integration-tests`**; **`role_id`** and **`secret_id`** in **GitHub Actions** and **Bitwarden**; CLI verification; then **running** the repo’s integration test workflow. Further policy or engine changes use [updating_integration_test_role.md](updating_integration_test_role.md).
+End-to-end setup means: an isolated **namespace**; default and integration-test **KV**, **database**, and **PKI** mounts (see conventions table); **ACL policies** from **`acl-policies/*.hcl`** attached to **AppRole** **`approle-integration-tests`** / role **`integration-tests`**; **`role_id`** and **`secret_id`** in **GitHub Actions** and **Bitwarden**; CLI verification; then **running** the repo’s integration test workflow. Further policy or engine changes use [Guide: Enabling a New Secret Engine for Integration Tests](updating_integration_test_role.md).
